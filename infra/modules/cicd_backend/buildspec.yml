@@ -1,0 +1,71 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - aws --version
+      - echo "Logging in to ECR..."
+      - aws ecr get-login-password --region $AWS_DEFAULT_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+      - IMAGE_TAG=$(echo $CODEBUILD_RESOLVED_SOURCE_VERSION | cut -c 1-7)
+      - echo "IMAGE_TAG=$IMAGE_TAG"
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t $REPOSITORY_URI:latest -f ./Pokemon.APIsql/Dockerfile .
+      - docker push $REPOSITORY_URI:latest
+
+  post_build:
+    commands:
+      - echo "Writing imageDetail.json..."
+      - printf '{"ImageURI":"%s"}' "$REPOSITORY_URI:latest" > imageDetail.json
+
+      - echo "Writing taskdef.json template..."
+      - |
+        cat > taskdef.json <<EOF
+        {
+          "family": "${TASK_FAMILY}",
+          "networkMode": "awsvpc",
+          "requiresCompatibilities": ["FARGATE"],
+          "cpu": "${CPU}",
+          "memory": "${MEMORY}",
+          "executionRoleArn": "${EXEC_ROLE_ARN}",
+          "containerDefinitions": [
+            {
+              "name": "${CONTAINER_NAME}",
+              "image": "<IMAGE1_NAME>",
+              "essential": true,
+              "portMappings": [
+                { "containerPort": ${CONTAINER_PORT}, "protocol": "tcp" }
+              ],
+              "environment": [
+                { "name": "DB_HOST", "value": "${DB_HOST}" },
+                { "name": "DB_PORT", "value": "${DB_PORT}" },
+                { "name": "DB_NAME", "value": "${DB_NAME}" },
+                { "name": "DB_USER", "value": "${DB_USER}" },
+                { "name": "DB_PASSWORD", "value": "${DB_PASSWORD}" }
+              ]
+            }
+          ]
+        }
+        EOF
+
+      - echo "Writing appspec.yaml template..."
+      - |
+        cat > appspec.yaml <<EOF
+        version: 1
+        Resources:
+          - TargetService:
+              Type: AWS::ECS::Service
+              Properties:
+                TaskDefinition: <TASK_DEFINITION>
+                LoadBalancerInfo:
+                  ContainerName: "${CONTAINER_NAME}"
+                  ContainerPort: ${CONTAINER_PORT}
+        EOF
+
+artifacts:
+  files:
+    - imageDetail.json
+    - taskdef.json
+    - appspec.yaml

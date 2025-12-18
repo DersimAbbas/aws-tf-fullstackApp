@@ -1,7 +1,5 @@
 # -------------------------
 # ALB Security Group
-# - Inbound HTTP 80 from Internet (or supplied CIDRs)
-# - Outbound all (so it can reach targets)
 # -------------------------
 resource "aws_security_group" "alb" {
   name        = "${var.name}-alb-sg"
@@ -16,8 +14,8 @@ resource "aws_security_group" "alb" {
     cidr_blocks = var.alb_ingress_cidrs
   }
 
-  ingress {
-    description = "HTTP test listener (CodeDeploy) from allowed CIDRs"
+   ingress {
+    description = "Test listener (CodeDeploy) from allowed CIDRs"
     from_port   = 9000
     to_port     = 9000
     protocol    = "tcp"
@@ -37,9 +35,7 @@ resource "aws_security_group" "alb" {
 
 # -------------------------
 # ECS Service/Task Security Group
-# - Inbound app_port ONLY from ALB SG
-# - Outbound all (pull ECR, write logs, reach DB, etc.)
-# -------------------------
+# ------------------------
 resource "aws_security_group" "ecs" {
   name        = "${var.name}-ecs-sg"
   description = "ECS SG: allow inbound from ALB only."
@@ -52,6 +48,14 @@ resource "aws_security_group" "ecs" {
     protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
+
+  /*ingress {
+    description = "HTTP test listener (CodeDeploy) from allowed CIDRs"
+    from_port   = 9000
+    to_port     = 9000
+    protocol    = "tcp"
+    cidr_blocks = var.alb_ingress_cidrs
+  }*/
 
   egress {
     description = "All outbound"
@@ -66,8 +70,6 @@ resource "aws_security_group" "ecs" {
 
 # -------------------------
 # RDS Security Group
-# - Inbound db_port ONLY from ECS SG
-# - Outbound all
 # -------------------------
 resource "aws_security_group" "rds" {
   name        = "${var.name}-rds-sg"

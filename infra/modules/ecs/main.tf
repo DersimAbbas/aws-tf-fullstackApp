@@ -103,7 +103,7 @@ resource "aws_ecs_service" "this" {
     container_port   = var.app_port
   }
 
-  # Let CodeDeploy control deployments later (avoid Terraform fighting it)
+
   lifecycle {
     ignore_changes = [
       task_definition,
